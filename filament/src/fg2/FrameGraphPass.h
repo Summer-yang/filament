@@ -34,7 +34,7 @@ protected:
     virtual void execute(FrameGraphResources const& resources, backend::DriverApi& driver) noexcept = 0;
 
 public:
-    FrameGraphPassExecutor();
+    FrameGraphPassExecutor() noexcept = default;
     virtual ~FrameGraphPassExecutor() noexcept;
     FrameGraphPassExecutor(FrameGraphPassExecutor const&) = delete;
     FrameGraphPassExecutor& operator = (FrameGraphPassExecutor const&) = delete;

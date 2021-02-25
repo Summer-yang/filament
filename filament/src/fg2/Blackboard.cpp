@@ -16,17 +16,33 @@
 
 #include "fg2/Blackboard.h"
 
+#include <utils/CString.h>
+
 using namespace utils;
 
 namespace filament::fg2 {
 
+Blackboard::Blackboard() noexcept = default;
+
+Blackboard::~Blackboard() noexcept = default;
+
 FrameGraphHandle Blackboard::getHandle(utils::StaticString const& name) const noexcept {
     auto it = mMap.find(name);
     if (it != mMap.end()) {
-        return it.value();
+        return it->second;
     }
     return {};
 }
+
+FrameGraphHandle& Blackboard::operator [](utils::StaticString const& name) noexcept {
+    auto[pos, _] = mMap.insert_or_assign(name, FrameGraphHandle{});
+    return pos->second;
+}
+
+void Blackboard::put(utils::StaticString const& name, FrameGraphHandle handle) noexcept {
+    operator[](name) = handle;
+}
+
 
 void Blackboard::remove(utils::StaticString const& name) noexcept {
     mMap.erase(name);

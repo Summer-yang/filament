@@ -79,12 +79,10 @@ protected:
 
 class Node : public DependencyGraph::Node {
     const char *mName;
-    bool mCulledCalled = false;
     char const* getName() const noexcept override { return mName; }
-    void onCulled(DependencyGraph* graph) noexcept override { mCulledCalled = true; }
 public:
     Node(DependencyGraph& graph, const char* name) noexcept : DependencyGraph::Node(graph), mName(name) { }
-    bool isCulledCalled() const noexcept { return mCulledCalled; }
+    bool isCulledCalled() const noexcept { return this->isCulled(); }
 };
 
 TEST(DependencyGraphTest, Simple) {

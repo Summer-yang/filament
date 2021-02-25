@@ -145,10 +145,12 @@ public:
         }
     };
 
+    UTILS_NOINLINE
     Resource(const char* name, Descriptor const& desc) noexcept
         : VirtualResource(name), descriptor(desc) {
     }
 
+    UTILS_NOINLINE
     Resource(Resource* parent, const char* name, SubResourceDescriptor const& desc) noexcept
             : VirtualResource(parent, name),
               descriptor(RESOURCE::generateSubResourceDescriptor(parent->descriptor, desc)),
@@ -158,6 +160,7 @@ public:
     ~Resource() noexcept = default;
 
     // pass Node to resource Node edge (a write to)
+    UTILS_NOINLINE
     virtual bool connect(DependencyGraph& graph,
             PassNode* passNode, ResourceNode* resourceNode, Usage u) {
         // TODO: we should check that usage flags are correct (e.g. a write flag is not used for reading)
@@ -173,6 +176,7 @@ public:
     }
 
     // resource Node to pass Node edge (a read from)
+    UTILS_NOINLINE
     virtual bool connect(DependencyGraph& graph,
             ResourceNode* resourceNode, PassNode* passNode, Usage u) {
         // TODO: we should check that usage flags are correct (e.g. a write flag is not used for reading)
@@ -255,13 +259,15 @@ class ImportedResource : public Resource<RESOURCE> {
 public:
     using Descriptor = typename RESOURCE::Descriptor;
     using Usage = typename RESOURCE::Usage;
+
+    UTILS_NOINLINE
     ImportedResource(const char* name, Descriptor const& desc, Usage usage, RESOURCE const& rsrc) noexcept
             : Resource<RESOURCE>(name, desc) {
         this->resource = rsrc;
         this->usage = usage;
     }
 
-private:
+protected:
     void devirtualize(ResourceAllocatorInterface&) noexcept override {
         // imported resources don't need to devirtualize
     }
@@ -271,24 +277,30 @@ private:
 
     bool isImported() const noexcept override { return true; }
 
+    UTILS_NOINLINE
     bool connect(DependencyGraph& graph,
             PassNode* passNode, ResourceNode* resourceNode, FrameGraphTexture::Usage u) override {
-        if (!ASSERT_PRECONDITION_NON_FATAL((u & this->usage) == u,
-                "Requested usage %s not available on imported resource \"%s\" with usage %s",
-                utils::to_string(u).c_str(), this->name, utils::to_string(this->usage).c_str())) {
+        if (UTILS_UNLIKELY(!assertConnect(u))) {
             return false;
         }
         return Resource<RESOURCE>::connect(graph, passNode, resourceNode, u);
     }
 
+    UTILS_NOINLINE
     bool connect(DependencyGraph& graph,
             ResourceNode* resourceNode, PassNode* passNode, FrameGraphTexture::Usage u) override {
-        if (!ASSERT_PRECONDITION_NON_FATAL((u & this->usage) == u,
-                "Requested usage %s not available on imported resource \"%s\" with usage %s",
-                utils::to_string(u).c_str(), this->name, utils::to_string(this->usage).c_str())) {
+        if (UTILS_UNLIKELY(!assertConnect(u))) {
             return false;
         }
         return Resource<RESOURCE>::connect(graph, resourceNode, passNode, u);
+    }
+
+private:
+    UTILS_NOINLINE
+    bool assertConnect(FrameGraphTexture::Usage u) {
+        return ASSERT_PRECONDITION_NON_FATAL((u & this->usage) == u,
+                "Requested usage %s not available on imported resource \"%s\" with usage %s",
+                utils::to_string(u).c_str(), this->name, utils::to_string(this->usage).c_str());
     }
 };
 
@@ -298,6 +310,7 @@ public:
     backend::Handle<backend::HwRenderTarget> target;
     FrameGraphRenderPass::ImportDescriptor importedDesc;
 
+    UTILS_NOINLINE
     ImportedRenderTarget(const char* name,
             FrameGraphTexture::Descriptor const& mainAttachmentDesc,
             FrameGraphRenderPass::ImportDescriptor const& importedDesc,
@@ -305,14 +318,20 @@ public:
 
     ~ImportedRenderTarget() noexcept override;
 
+protected:
+    UTILS_NOINLINE
     bool connect(DependencyGraph& graph,
             PassNode* passNode, ResourceNode* resourceNode, FrameGraphTexture::Usage u) override;
 
+    UTILS_NOINLINE
     bool connect(DependencyGraph& graph,
             ResourceNode* resourceNode, PassNode* passNode, FrameGraphTexture::Usage u) override;
 
     ImportedRenderTarget* asImportedRenderTarget() noexcept override { return this; }
+
 private:
+    bool assertConnect(FrameGraphTexture::Usage u);
+
     static FrameGraphTexture::Usage usageFromAttachmentsFlags(
             backend::TargetBufferFlags attachments) noexcept;
 };

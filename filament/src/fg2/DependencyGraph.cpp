@@ -24,6 +24,8 @@ DependencyGraph::DependencyGraph() noexcept {
     mEdges.reserve(16);
 }
 
+DependencyGraph::~DependencyGraph() noexcept = default;
+
 uint32_t DependencyGraph::generateNodeId() noexcept {
     return mNodes.size();
 }
@@ -99,7 +101,7 @@ void DependencyGraph::cull() noexcept {
     }
 
     // cull nodes with a 0 reference count
-    std::vector<Node*> stack;
+    NodeContainer stack;
     stack.reserve(nodes.size());
     for (Node* const pNode : nodes) {
         if (pNode->getRefCount() == 0) {
@@ -116,7 +118,6 @@ void DependencyGraph::cull() noexcept {
                 stack.push_back(pLinkedNode);
             }
         }
-        pNode->onCulled(this);
     }
 }
 
@@ -225,8 +226,6 @@ DependencyGraph::Node::Node(DependencyGraph& graph) noexcept : mId(graph.generat
     graph.registerNode(this, mId);
 }
 
-DependencyGraph::Node::~Node() noexcept = default;
-
 uint32_t DependencyGraph::Node::getRefCount() const noexcept {
     return (mRefCount & TARGET) ? 1u : mRefCount;
 }
@@ -250,9 +249,6 @@ bool DependencyGraph::Node::isTarget() const noexcept {
 
 char const* DependencyGraph::Node::getName() const noexcept {
     return "unknown";
-}
-
-void DependencyGraph::Node::onCulled(DependencyGraph* graph) noexcept {
 }
 
 utils::CString DependencyGraph::Node::graphvizify() const noexcept {

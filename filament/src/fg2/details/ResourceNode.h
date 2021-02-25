@@ -96,7 +96,6 @@ private:
     DependencyGraph::Edge* mForwardedEdge = nullptr;
 
     // virtuals from DependencyGraph::Node
-    void onCulled(DependencyGraph* graph) noexcept override;
     utils::CString graphvizify() const noexcept override;
     utils::CString graphvizifyEdgeColor() const noexcept override;
 };

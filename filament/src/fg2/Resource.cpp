@@ -28,34 +28,34 @@ namespace filament::fg2 {
 
 VirtualResource::~VirtualResource() noexcept = default;
 
-void VirtualResource::addOutgoingEdge(ResourceNode* node, ResourceEdgeBase* edge) noexcept {
+inline void VirtualResource::addOutgoingEdge(ResourceNode* node, ResourceEdgeBase* edge) noexcept {
     node->addOutgoingEdge(edge);
 }
 
-void VirtualResource::setIncomingEdge(ResourceNode* node, ResourceEdgeBase* edge) noexcept {
+inline void VirtualResource::setIncomingEdge(ResourceNode* node, ResourceEdgeBase* edge) noexcept {
     node->setIncomingEdge(edge);
 }
 
-DependencyGraph::Node* VirtualResource::toDependencyGraphNode(ResourceNode* node) noexcept {
+inline DependencyGraph::Node* VirtualResource::toDependencyGraphNode(ResourceNode* node) noexcept {
     // this can't go to the header file, because it would add a dependency on ResourceNode.h,
     // which we prefer to avoid
     return node;
 }
 
-DependencyGraph::Node* VirtualResource::toDependencyGraphNode(PassNode* node) noexcept {
+inline DependencyGraph::Node* VirtualResource::toDependencyGraphNode(PassNode* node) noexcept {
     // this can't go to the header file, because it would add a dependency on PassNode.h
     // which we prefer to avoid
     return node;
 }
 
-ResourceEdgeBase* VirtualResource::getReaderEdgeForPass(
+inline ResourceEdgeBase* VirtualResource::getReaderEdgeForPass(
         ResourceNode* resourceNode, PassNode* passNode) noexcept {
     // this can't go to the header file, because it would add a dependency on PassNode.h
     // which we prefer to avoid
     return resourceNode->getReaderEdgeForPass(passNode);
 }
 
-ResourceEdgeBase* VirtualResource::getWriterEdgeForPass(
+inline ResourceEdgeBase* VirtualResource::getWriterEdgeForPass(
         ResourceNode* resourceNode, PassNode* passNode) noexcept {
     // this can't go to the header file, because it would add a dependency on PassNode.h
     // which we prefer to avoid
@@ -88,17 +88,21 @@ ImportedRenderTarget::ImportedRenderTarget(char const* name,
           target(target), importedDesc(importedDesc) {
 }
 
-bool ImportedRenderTarget::connect(DependencyGraph& graph, PassNode* passNode,
-        ResourceNode* resourceNode, TextureUsage u) {
-    // pass Node to resource Node edge (a write to)
-
+UTILS_NOINLINE
+bool ImportedRenderTarget::assertConnect(FrameGraphTexture::Usage u) {
     constexpr auto ANY_ATTACHMENT = FrameGraphTexture::Usage::COLOR_ATTACHMENT |
                                     FrameGraphTexture::Usage::DEPTH_ATTACHMENT |
                                     FrameGraphTexture::Usage::STENCIL_ATTACHMENT;
 
-    if (!ASSERT_PRECONDITION_NON_FATAL(none(u & ~ANY_ATTACHMENT),
+    return ASSERT_PRECONDITION_NON_FATAL(none(u & ~ANY_ATTACHMENT),
             "Imported render target resource \"%s\" can only be used as an attachment (usage=%s)",
-            name, utils::to_string(u).c_str())) {
+            name, utils::to_string(u).c_str());
+}
+
+bool ImportedRenderTarget::connect(DependencyGraph& graph, PassNode* passNode,
+        ResourceNode* resourceNode, TextureUsage u) {
+    // pass Node to resource Node edge (a write to)
+    if (UTILS_UNLIKELY(!assertConnect(u))) {
         return false;
     }
     return Resource::connect(graph, passNode, resourceNode, u);
@@ -107,14 +111,7 @@ bool ImportedRenderTarget::connect(DependencyGraph& graph, PassNode* passNode,
 bool ImportedRenderTarget::connect(DependencyGraph& graph, ResourceNode* resourceNode,
         PassNode* passNode, TextureUsage u) {
     // resource Node to pass Node edge (a read from)
-
-    constexpr auto ANY_ATTACHMENT = FrameGraphTexture::Usage::COLOR_ATTACHMENT |
-                                    FrameGraphTexture::Usage::DEPTH_ATTACHMENT |
-                                    FrameGraphTexture::Usage::STENCIL_ATTACHMENT;
-
-    if (!ASSERT_PRECONDITION_NON_FATAL(none(u & ~ANY_ATTACHMENT),
-            "Imported render target resource \"%s\" can only be used as an attachment (usage=%s)",
-            name, utils::to_string(u).c_str())) {
+    if (UTILS_UNLIKELY(!assertConnect(u))) {
         return false;
     }
     return Resource::connect(graph, resourceNode, passNode, u);

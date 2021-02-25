@@ -23,7 +23,7 @@
 #include "fg2/FrameGraphRenderPass.h"
 #include "private/backend/DriverApiForward.h"
 
-#include <tsl/robin_set.h>
+#include <unordered_set>
 
 namespace utils {
 class CString;
@@ -40,7 +40,7 @@ class PassNode : public DependencyGraph::Node {
 protected:
     friend class FrameGraphResources;
     FrameGraph& mFrameGraph;
-    tsl::robin_set<FrameGraphHandle::Index> mDeclaredHandles;
+    std::unordered_set<FrameGraphHandle::Index> mDeclaredHandles;
 public:
     PassNode(FrameGraph& fg) noexcept;
     PassNode(PassNode&& rhs) noexcept;
@@ -91,7 +91,6 @@ public:
 private:
     // virtuals from DependencyGraph::Node
     char const* getName() const noexcept override { return mName; }
-    void onCulled(DependencyGraph* graph) noexcept override;
     utils::CString graphvizify() const noexcept override;
     void execute(FrameGraphResources const& resources, backend::DriverApi& driver) noexcept override;
     void resolve() noexcept override;
@@ -116,7 +115,6 @@ public:
 private:
     // virtuals from DependencyGraph::Node
     char const* getName() const noexcept override;
-    void onCulled(DependencyGraph* graph) noexcept override;
     utils::CString graphvizify() const noexcept override;
 };
 

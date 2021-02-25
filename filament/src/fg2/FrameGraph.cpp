@@ -28,11 +28,9 @@
 
 namespace filament::fg2 {
 
-FrameGraph::Builder::Builder(FrameGraph& fg, PassNode* passNode) noexcept
+inline FrameGraph::Builder::Builder(FrameGraph& fg, PassNode* passNode) noexcept
         : mFrameGraph(fg), mPassNode(passNode) {
 }
-
-FrameGraph::Builder::~Builder() noexcept = default;
 
 void FrameGraph::Builder::sideEffect() noexcept {
     mPassNode->makeTarget();
@@ -74,10 +72,27 @@ FrameGraph::FrameGraph(ResourceAllocatorInterface& resourceAllocator)
     mPassNodes.reserve(64);
 }
 
-FrameGraph::~FrameGraph() = default;
+UTILS_NOINLINE
+void FrameGraph::destroyInternal() noexcept {
+    // the order of destruction is important here
+    LinearAllocatorArena& arena = mArena;
+    std::for_each(mPassNodes.begin(), mPassNodes.end(), [&arena](auto item) {
+        arena.destroy(item);
+    });
+    std::for_each(mResourceNodes.begin(), mResourceNodes.end(), [&arena](auto item) {
+        arena.destroy(item);
+    });
+    std::for_each(mResources.begin(), mResources.end(), [&arena](auto item) {
+        arena.destroy(item);
+    });
+}
+
+FrameGraph::~FrameGraph() noexcept {
+    destroyInternal();
+}
 
 void FrameGraph::reset() noexcept {
-    // the order of destruction is important here
+    destroyInternal();
     mPassNodes.clear();
     mResourceNodes.clear();
     mResources.clear();
@@ -103,7 +118,7 @@ FrameGraph& FrameGraph::compile() noexcept {
     auto first = mPassNodes.begin();
     const auto activePassNodesEnd = mActivePassNodesEnd;
     while (first != activePassNodesEnd) {
-        PassNode* const passNode = first->get();
+        PassNode* const passNode = *first;
         first++;
         assert_invariant(!passNode->isCulled());
 
@@ -129,8 +144,8 @@ FrameGraph& FrameGraph::compile() noexcept {
     }
 
     // add resource to de-virtualize or destroy to the corresponding list for each active pass
-    for (auto& pResource : mResources) {
-        VirtualResource* resource = pResource.get();
+    for (auto* pResource : mResources) {
+        VirtualResource* resource = pResource;
         if (resource->refcount) {
             PassNode* pFirst = resource->first;
             PassNode* pLast = resource->last;
@@ -167,7 +182,7 @@ void FrameGraph::execute(backend::DriverApi& driver) noexcept {
     auto first = passNodes.begin();
     const auto activePassNodesEnd = mActivePassNodesEnd;
     while (first != activePassNodesEnd) {
-        PassNode* const node = first->get();
+        PassNode* const node = *first;
         first++;
         assert_invariant(!node->isCulled());
 
@@ -198,7 +213,7 @@ void FrameGraph::execute(backend::DriverApi& driver) noexcept {
 
 void FrameGraph::addPresentPass(std::function<void(FrameGraph::Builder&)> setup) noexcept {
     PresentPassNode* node = mArena.make<PresentPassNode>(*this);
-    mPassNodes.emplace_back(node, mArena);
+    mPassNodes.push_back(node);
     Builder builder(*this, node);
     setup(builder);
     builder.sideEffect();
@@ -208,7 +223,7 @@ FrameGraph::Builder FrameGraph::addPassInternal(char const* name, FrameGraphPass
     // record in our pass list and create the builder
     PassNode* node = mArena.make<RenderPassNode>(*this, name, base);
     base->setNode(node);
-    mPassNodes.emplace_back(node, mArena);
+    mPassNodes.push_back(node);
     return Builder(*this, node);
 }
 
@@ -217,7 +232,7 @@ FrameGraphHandle FrameGraph::createNewVersion(FrameGraphHandle handle, FrameGrap
     slot.version = ++handle.version;   // increase the parent's version
     slot.nid = mResourceNodes.size();   // create the new parent node
     ResourceNode* newNode = mArena.make<ResourceNode>(*this, handle, parent);
-    mResourceNodes.emplace_back(newNode, mArena);
+    mResourceNodes.push_back(newNode);
     return handle;
 }
 
@@ -229,24 +244,24 @@ FrameGraphHandle FrameGraph::createNewVersionForSubresourceIfNeeded(FrameGraphHa
         slot.sid = slot.nid; // record the current ResourceNode of the parent
         slot.nid = mResourceNodes.size();   // create the new parent node
         ResourceNode* newNode = mArena.make<ResourceNode>(*this, handle, FrameGraphHandle{});
-        mResourceNodes.emplace_back(newNode, mArena);
+        mResourceNodes.push_back(newNode);
     }
     return handle;
 }
 
-FrameGraphHandle FrameGraph::addResourceInternal(UniquePtr<VirtualResource> resource) noexcept {
-    return addSubResourceInternal(FrameGraphHandle{}, std::move(resource));
+FrameGraphHandle FrameGraph::addResourceInternal(VirtualResource* resource) noexcept {
+    return addSubResourceInternal(FrameGraphHandle{}, resource);
 }
 
 FrameGraphHandle FrameGraph::addSubResourceInternal(FrameGraphHandle parent,
-        UniquePtr<VirtualResource> resource) noexcept {
+        VirtualResource* resource) noexcept {
     FrameGraphHandle handle(mResourceSlots.size());
     ResourceSlot& slot = mResourceSlots.emplace_back();
     slot.rid = mResources.size();
     slot.nid = mResourceNodes.size();
-    mResources.push_back(std::move(resource));
+    mResources.push_back(resource);
     ResourceNode* pNode = mArena.make<ResourceNode>(*this, handle, parent);
-    mResourceNodes.emplace_back(pNode, mArena);
+    mResourceNodes.push_back(pNode);
     return handle;
 }
 
@@ -284,7 +299,7 @@ FrameGraphHandle FrameGraph::readInternal(FrameGraphHandle handle, PassNode* pas
             ResourceSlot& slot = getResourceSlot(parentNode->resourceHandle);
             if (slot.sid >= 0) {
                 // we have a parent's node for reads, use the one
-                parentNode = mResourceNodes[slot.sid].get();
+                parentNode = mResourceNodes[slot.sid];
             }
             node->setParentReadDependency(parentNode);
         }
@@ -382,13 +397,13 @@ FrameGraphId<FrameGraphTexture> FrameGraph::import(char const* name,
         FrameGraphRenderPass::ImportDescriptor const& desc,
         backend::Handle<backend::HwRenderTarget> target) {
     // create a resource that represents the imported render target
-    UniquePtr<VirtualResource> vresource(
+    VirtualResource* vresource =
             mArena.make<ImportedRenderTarget>(name,
                     FrameGraphTexture::Descriptor{
                             .width = desc.viewport.width,
-                            .height = desc.viewport.height,
-                    }, desc, target), mArena);
-    return FrameGraphId<FrameGraphTexture>(addResourceInternal(std::move(vresource)));
+                            .height = desc.viewport.height
+                    }, desc, target);
+    return FrameGraphId<FrameGraphTexture>(addResourceInternal(vresource));
 }
 
 bool FrameGraph::isValid(FrameGraphHandle handle) const {

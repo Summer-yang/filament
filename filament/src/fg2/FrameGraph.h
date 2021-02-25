@@ -35,6 +35,7 @@
 #include <backend/Handle.h>
 
 #include <functional>
+#include <vector>
 
 namespace filament {
 
@@ -201,7 +202,7 @@ public:
     private:
         friend class FrameGraph;
         Builder(FrameGraph& fg, PassNode* passNode) noexcept;
-        ~Builder() noexcept;
+        ~Builder() noexcept = default;
         FrameGraph& mFrameGraph;
         PassNode* const mPassNode;
     };
@@ -211,7 +212,7 @@ public:
     explicit FrameGraph(ResourceAllocatorInterface& resourceAllocator);
     FrameGraph(FrameGraph const&) = delete;
     FrameGraph& operator=(FrameGraph const&) = delete;
-    ~FrameGraph();
+    ~FrameGraph() noexcept;
 
     /** returns the default Blackboard */
     Blackboard& getBlackboard() noexcept { return mBlackboard; }
@@ -374,7 +375,6 @@ private:
     friend class ResourceNode;
     friend class RenderPassNode;
 
-    template<typename T> using UniquePtr = std::unique_ptr<T, Deleter<T, LinearAllocatorArena>>;
     template<typename T> using Allocator = utils::STLAllocator<T, LinearAllocatorArena>;
     template<typename T> using Vector = std::vector<T, Allocator<T>>; // 32 bytes
 
@@ -395,8 +395,8 @@ private:
     Builder addPassInternal(const char* name, FrameGraphPassBase* base) noexcept;
     FrameGraphHandle createNewVersion(FrameGraphHandle handle, FrameGraphHandle parent = {}) noexcept;
     FrameGraphHandle createNewVersionForSubresourceIfNeeded(FrameGraphHandle handle) noexcept;
-    FrameGraphHandle addResourceInternal(UniquePtr<VirtualResource> resource) noexcept;
-    FrameGraphHandle addSubResourceInternal(FrameGraphHandle parent, UniquePtr<VirtualResource> resource) noexcept;
+    FrameGraphHandle addResourceInternal(VirtualResource* resource) noexcept;
+    FrameGraphHandle addSubResourceInternal(FrameGraphHandle parent, VirtualResource* resource) noexcept;
     FrameGraphHandle readInternal(FrameGraphHandle handle, PassNode* passNode,
             std::function<bool(ResourceNode*, VirtualResource*)> connect);
     FrameGraphHandle writeInternal(FrameGraphHandle handle, PassNode* passNode,
@@ -437,13 +437,13 @@ private:
         assert_invariant(handle.isInitialized());
         ResourceSlot const& slot = getResourceSlot(handle);
         assert_invariant((size_t)slot.rid < mResources.size());
-        return mResources[slot.rid].get();
+        return mResources[slot.rid];
     }
 
     ResourceNode* getActiveResourceNode(FrameGraphHandle handle) noexcept {
         ResourceSlot const& slot = getResourceSlot(handle);
         assert_invariant((size_t)slot.nid < mResourceNodes.size());
-        return mResourceNodes[slot.nid].get();
+        return mResourceNodes[slot.nid];
     }
 
     VirtualResource const* getResource(FrameGraphHandle handle) const noexcept {
@@ -454,18 +454,18 @@ private:
         return const_cast<FrameGraph*>(this)->getActiveResourceNode(handle);
     }
 
+    void destroyInternal() noexcept;
+
     Blackboard mBlackboard;
     ResourceAllocatorInterface& mResourceAllocator;
     LinearAllocatorArena mArena;
     DependencyGraph mGraph;
 
-    // TODO: not sure that we need unique_ptr<>, it might be enough to just free the
-    //       objects in the dtor and in reset(). We can fix that later.
     Vector<ResourceSlot> mResourceSlots;
-    Vector<UniquePtr<VirtualResource>> mResources;
-    Vector<UniquePtr<ResourceNode>> mResourceNodes;
-    Vector<UniquePtr<PassNode>> mPassNodes;
-    Vector<UniquePtr<PassNode>>::iterator mActivePassNodesEnd;
+    Vector<VirtualResource*> mResources;
+    Vector<ResourceNode*> mResourceNodes;
+    Vector<PassNode*> mPassNodes;
+    Vector<PassNode*>::iterator mActivePassNodesEnd;
 };
 
 template<typename Data, typename Setup, typename Execute>
@@ -499,16 +499,16 @@ void FrameGraph::present(FrameGraphId<RESOURCE> input) {
 template<typename RESOURCE>
 FrameGraphId<RESOURCE> FrameGraph::create(char const* name,
         typename RESOURCE::Descriptor const& desc) noexcept {
-    UniquePtr<VirtualResource> vresource(mArena.make<Resource<RESOURCE>>(name, desc), mArena);
-    return FrameGraphId<RESOURCE>(addResourceInternal(std::move(vresource)));
+    VirtualResource* vresource(mArena.make<Resource<RESOURCE>>(name, desc));
+    return FrameGraphId<RESOURCE>(addResourceInternal(vresource));
 }
 
 template<typename RESOURCE>
 FrameGraphId<RESOURCE> FrameGraph::createSubresource(FrameGraphId<RESOURCE> parent,
         char const* name, typename RESOURCE::SubResourceDescriptor const& desc) noexcept {
     auto* parentResource = static_cast<Resource<RESOURCE>*>(getResource(parent));
-    UniquePtr<VirtualResource> vresource(mArena.make<Resource<RESOURCE>>(parentResource, name, desc), mArena);
-    return FrameGraphId<RESOURCE>(addSubResourceInternal(parent, std::move(vresource)));
+    VirtualResource* vresource(mArena.make<Resource<RESOURCE>>(parentResource, name, desc));
+    return FrameGraphId<RESOURCE>(addSubResourceInternal(parent, vresource));
 }
 
 template<typename RESOURCE>
@@ -516,8 +516,8 @@ FrameGraphId<RESOURCE> FrameGraph::import(char const* name,
         typename RESOURCE::Descriptor const& desc,
         typename RESOURCE::Usage usage,
         RESOURCE const& resource) noexcept {
-    UniquePtr<VirtualResource> vresource(mArena.make<ImportedResource<RESOURCE>>(name, desc, usage, resource), mArena);
-    return FrameGraphId<RESOURCE>(addResourceInternal(std::move(vresource)));
+    VirtualResource* vresource(mArena.make<ImportedResource<RESOURCE>>(name, desc, usage, resource));
+    return FrameGraphId<RESOURCE>(addResourceInternal(vresource));
 }
 
 template<typename RESOURCE>

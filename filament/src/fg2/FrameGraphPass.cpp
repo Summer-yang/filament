@@ -18,7 +18,6 @@
 
 namespace filament::fg2 {
 
-FrameGraphPassExecutor::FrameGraphPassExecutor() = default;
 FrameGraphPassExecutor::~FrameGraphPassExecutor() noexcept = default;
 
 FrameGraphPassBase::~FrameGraphPassBase() noexcept = default;

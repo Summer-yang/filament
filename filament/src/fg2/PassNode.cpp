@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 
-#include "fg2/FrameGraph.h"
 #include "fg2/details/PassNode.h"
+
+#include "fg2/FrameGraph.h"
 #include "fg2/details/ResourceNode.h"
+
 #include "ResourceAllocator.h"
 
 #include <details/Texture.h>
@@ -55,9 +57,6 @@ RenderPassNode::RenderPassNode(FrameGraph& fg, const char* name, FrameGraphPassB
 }
 RenderPassNode::RenderPassNode(RenderPassNode&& rhs) noexcept = default;
 RenderPassNode::~RenderPassNode() noexcept = default;
-
-void RenderPassNode::onCulled(DependencyGraph* graph) noexcept {
-}
 
 void RenderPassNode::execute(FrameGraphResources const& resources, DriverApi& driver) noexcept {
 
@@ -314,9 +313,6 @@ PresentPassNode::~PresentPassNode() noexcept = default;
 
 char const* PresentPassNode::getName() const noexcept {
     return "Present";
-}
-
-void PresentPassNode::onCulled(DependencyGraph* graph) noexcept {
 }
 
 utils::CString PresentPassNode::graphvizify() const noexcept {

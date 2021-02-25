@@ -42,9 +42,6 @@ ResourceNode* ResourceNode::getParentNode() noexcept {
            mFrameGraph.getActiveResourceNode(mParentHandle) : nullptr;
 }
 
-void ResourceNode::onCulled(DependencyGraph* graph) noexcept {
-}
-
 char const* ResourceNode::getName() const noexcept {
     return mFrameGraph.getResource(resourceHandle)->name;
 }
@@ -123,6 +120,7 @@ void ResourceNode::resolveResourceUsage(DependencyGraph& graph) noexcept {
 }
 
 utils::CString ResourceNode::graphvizify() const noexcept {
+#ifndef NDEBUG
     std::string s;
     s.reserve(128);
 
@@ -154,11 +152,13 @@ utils::CString ResourceNode::graphvizify() const noexcept {
     s.shrink_to_fit();
 
     return utils::CString{ s.c_str() };
+#else
+    return {};
+#endif
 }
 
 utils::CString ResourceNode::graphvizifyEdgeColor() const noexcept {
-    //return utils::CString{ mParent ? "skyblue" : "darkolivegreen" };
-    return utils::CString{ "darkolivegreen" };
+    return utils::StaticString{ "darkolivegreen" };
 }
 
 } // namespace filament::fg2

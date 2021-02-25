@@ -31,6 +31,7 @@ namespace filament::fg2 {
 class DependencyGraph {
 public:
     DependencyGraph() noexcept;
+    ~DependencyGraph() noexcept;
     DependencyGraph(const DependencyGraph&) noexcept = delete;
     DependencyGraph& operator=(const DependencyGraph&) noexcept = delete;
 
@@ -82,7 +83,7 @@ public:
         //! Nodes can be moved
         Node(Node&&) noexcept = default;
 
-        virtual ~Node() noexcept;
+        virtual ~Node() noexcept = default;
 
         //! returns a unique id for this node
         NodeID getId() const noexcept;
@@ -110,9 +111,6 @@ public:
     public:
         //! return the name of this node
         virtual char const* getName() const noexcept;
-
-        //! called from DependencyGraph::cull() when a node a culled
-        virtual void onCulled(DependencyGraph* graph) noexcept;
 
         //! output itself as a graphviz string
         virtual utils::CString graphvizify() const noexcept;
